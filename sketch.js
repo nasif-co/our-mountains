@@ -106,6 +106,11 @@ function draw() {
     //vertex(pointList[i], y);
     stroke(lerpColor('#00D6C4', '#9051FF', i/pointList.length));
     strokeWeight(8);
+    if (i > 0) {  // Skip first point
+      // Draw outline by connecting current point to previous point
+      // Creates a continuous line that forms the mountain's outline 
+      line(pointList[i], y, currentMountain[i-1].x, currentMountain[i-1].y);
+    }
     line(pointList[i], height, pointList[i], y);
     noStroke();
     
