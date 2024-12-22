@@ -26,7 +26,7 @@ function setup() {
   }
   setHorizontalPoints();
 
-  video = createCapture({ flipped: true });
+  video = createCapture({ flipped: true, video: true, audio: false });
   video.size(windowWidth, windowHeight);
   video.hide();
   bodyPose.detectStart(video, gotPoses);
@@ -46,7 +46,13 @@ function draw() {
     beginShape();
     let mountain = mountains[i];
     for (let rock of mountain) {
-      vertex(rock.x, rock.y - 30 * (i + 1));
+      // When frameCount hits 50, reset mountain position to its base height
+      if (frameCount % 50 == 0) {
+        vertex(rock.x, rock.y - 30 * (i+1));
+      } else {
+        // frameCount % 50 / 50: creates smooth 0-1 transition over 50 frames
+        vertex(rock.x, rock.y - 30 * (i) - 30 * (frameCount % 50) / 50);
+      }
     }
     vertex(width * 2, height);
     vertex(0, height);
@@ -100,6 +106,11 @@ function draw() {
     //vertex(pointList[i], y);
     stroke(lerpColor('#00D6C4', '#9051FF', i/pointList.length));
     strokeWeight(8);
+    if (i > 0) {  // Skip first point
+      // Draw outline by connecting current point to previous point
+      // Creates a continuous line that forms the mountain's outline 
+      line(pointList[i], y, currentMountain[i-1].x, currentMountain[i-1].y);
+    }
     line(pointList[i], height, pointList[i], y);
     noStroke();
     
