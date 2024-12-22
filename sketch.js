@@ -10,13 +10,25 @@ const mountainPeakWidth = 20;
 const mountainBaseWidth = 200;
 
 let mountains = [];
+let centers = [];
 
 const maxPoints = 300;
 const historySize = 50;
 
+const defaultPeakMultiplier = 3;
+const defaultPlainsMultiplier = 0.1;
+
+let targetPeakMultiplier = defaultPeakMultiplier;
+let targetPlainsMultiplier = defaultPlainsMultiplier;
+
+let peakMultiplier = defaultPeakMultiplier;
+let plainsMultiplier = defaultPlainsMultiplier;
+
+const maxUsers = 5;
+
 function preload() {
   // Load the bodyPose model
-  bodyPose = ml5.bodyPose({ flipped: true });
+  //bodyPose = ml5.bodyPose({ flipped: true });
 }
 
 function setup() {
@@ -29,81 +41,85 @@ function setup() {
   video = createCapture({ flipped: true, video: true, audio: false });
   video.size(windowWidth, windowHeight);
   video.hide();
-  bodyPose.detectStart(video, gotPoses);
+  //bodyPose.detectStart(video, gotPoses);
+  textSize(40);
+  textAlign(LEFT, TOP);
 }
 
 function draw() {
+  centers = [];
+  for (let k = 0; k < quantity; k++) {
+    centers.push(k*width/quantity);
+  }
+  
   background("white");
-  textSize(40);
-  textAlign(LEFT, TOP);
-  text("FPS: " + round(frameRate()), 20, 20);
   noStroke();
   //History
-  for (let i = mountains.length - 1; i >= 0; i--) {
-    fill(
-      lerpColor(color("rgb(134,142,255)"), color("white"), i / (height / 100))
-    );
-    beginShape();
-    let mountain = mountains[i];
-    for (let rock of mountain) {
-      // When frameCount hits 50, reset mountain position to its base height
-      if (frameCount % 50 == 0) {
-        vertex(rock.x, rock.y - 30 * (i+1));
-      } else {
-        // frameCount % 50 / 50: creates smooth 0-1 transition over 50 frames
-        vertex(rock.x, rock.y - 30 * (i) - 30 * (frameCount % 50) / 50);
-      }
-    }
-    vertex(width * 2, height);
-    vertex(0, height);
-    endShape(CLOSE);
-  }
+  // for (let i = mountains.length - 1; i >= 0; i--) {
+  //   fill(
+  //     lerpColor(color("rgb(134,142,255)"), color("white"), i / (height / 100))
+  //   );
+  //   beginShape();
+  //   let mountain = mountains[i];
+  //   for (let rock of mountain) {
+  //     // When frameCount hits 50, reset mountain position to its base height
+  //     if (frameCount % 50 == 0) {
+  //       vertex(rock.x, rock.y - 30 * (i+1));
+  //     } else {
+  //       // frameCount % 50 / 50: creates smooth 0-1 transition over 50 frames
+  //       vertex(rock.x, rock.y - 30 * (i) - 30 * (frameCount % 50) / 50);
+  //     }
+  //   }
+  //   vertex(width * 2, height);
+  //   vertex(0, height);
+  //   endShape(CLOSE);
+  // }
 
   //Current
-  fill("black");
   let currentMountain = [];
-  //beginShape();
+
+  //Dynamic sizing attributes for the mountains
+  //Depending on how many people are present, the max and min sizes
+  //of the mountains are set, to avoid overflowing the canvas.
+  //When people leave, the dynamic size updates smoothly
+  targetPlainsMultiplier = defaultPlainsMultiplier/constrain(centers.length*0.6,1, maxUsers);
+  targetPeakMultiplier = defaultPeakMultiplier/constrain(centers.length*0.6,1, maxUsers);
+  
+  let peakAdjustmentSpeed = map(targetPeakMultiplier - peakMultiplier, 0, defaultPeakMultiplier, 0, 0.08);
+  let plainsAdjustmentSpeed = map(targetPlainsMultiplier - plainsMultiplier, 0, defaultPlainsMultiplier, 0, 0.08);
+
+  peakMultiplier += peakAdjustmentSpeed;
+  plainsMultiplier += plainsAdjustmentSpeed;
+
+  //Go through each horizontal point
   for (let i = 0; i < pointList.length; i++) {
-    let base = 0.1;
-    let y = 1;
-
-    if (centers.length == 1) {
-      base = map(
-        abs(dist(pointList[i], 0, centers[0], 0)),
-        mountainPeakWidth,
-        mountainBaseWidth,
-        3,
-        0.1,
-        true
-      );
-      
-    } else if (centers.length == 2) {
-
-      let baseA = map(
-        abs(dist(pointList[i], 0, centers[0], 0)),
-        mountainPeakWidth,
-        mountainBaseWidth,
-        3,
-        0.1,
-        true
-      );
-      
-      let baseB = map(
-        abs(dist(pointList[i], 0, centers[1], 0)),
-        mountainPeakWidth,
-        mountainBaseWidth,
-        2,
-        0.07,
-        true
-      );
-      
-      base = baseA + baseB;
-    }
     
-    y =
-      (noise(i * 0.005 + 500 + noiseTime) * -height * base) / 2 + height * 1.1;
+    //Set the base. If people are present, the base starts at 0.
+    //otherwise the base has the minimum value.
+    let base = centers.length > 0? 0 : plainsMultiplier;
 
-    //vertex(pointList[i], y);
+    //Go through each person
+    centers.forEach(center => {
+      //Calculate how much to raise the current point vertically,
+      //depending on how close the person is to it.
+      base += map(
+        abs(dist(pointList[i], 0, center, 0)),
+        mountainPeakWidth,
+        mountainBaseWidth,
+        peakMultiplier,
+        plainsMultiplier,
+        true
+      );
+    });
+
+    //The y for the current point starts at height (bottom of canvas)
+    //a noise value is subtracted to create a terrain. This terrain is 
+    //multiplied by the base value, which raises it depending on the position
+    //of each person 
+    let y = height - noise(i * 0.005 + noiseTime) * base;
+    //Finally, this calculated y is amplified to be more visible
+    y = map(y, height, height - defaultPeakMultiplier, height + 1, 0);
+
     stroke(lerpColor('#00D6C4', '#9051FF', i/pointList.length));
     strokeWeight(8);
     if (i > 0) {  // Skip first point
@@ -119,24 +135,35 @@ function draw() {
       y: y,
     });
   }
-  //vertex(width * 2, height);
-  //vertex(0, height);
-  //endShape(CLOSE);
 
-  if (frameCount % 50 == 0) {
-    mountains.unshift(currentMountain);
-    mountains = mountains.splice(0, historySize);
-    setHorizontalPoints();
-  }
+  // if (frameCount % 50 == 0) {
+  //   mountains.unshift(currentMountain);
+  //   mountains = mountains.splice(0, historySize);
+  //   setHorizontalPoints();
+  // }
 
+  //
   // for (let j = 0; j < centers.length; j++) {
   //   stroke('green');
   //   line(centers[j],0, centers[j], height);
   // }
+
+  //Show fps for debugging
+  text("FPS: " + round(frameRate()) +" Q: " + quantity, 20, 20);
+}
+
+function keyReleased() {
+  setHorizontalPoints();
+}
+
+let quantity = 0;
+
+function mouseReleased() {
+  quantity++;
 }
 
 function setHorizontalPoints() {
-  noiseTime += 5;
+  noiseTime += 1;
   pointList = [];
   for (let i = 0; i < points; i++) {
     pointList[i] = noise(i * 2 + noiseTime) * width;
@@ -146,8 +173,6 @@ function setHorizontalPoints() {
     return a - b;
   });
 }
-
-let centers = [];
 
 function gotPoses(results) {
   // Save the output to the poses variable
