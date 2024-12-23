@@ -16,13 +16,11 @@ const maxPoints = 300;
 const historySize = 50;
 
 const defaultPeakMultiplier = 3;
-const defaultPlainsMultiplier = 0.1;
+const plainsMultiplier = 0.1;
 
 let targetPeakMultiplier = defaultPeakMultiplier;
-let targetPlainsMultiplier = defaultPlainsMultiplier;
 
 let peakMultiplier = defaultPeakMultiplier;
-let plainsMultiplier = defaultPlainsMultiplier;
 
 const maxUsers = 5;
 
@@ -51,6 +49,10 @@ function draw() {
   for (let k = 0; k < quantity; k++) {
     centers.push(k*width/quantity);
   }
+  if(mouseX > 100 && mouseX < width - 100) {
+    centers.push(mouseX);
+  }
+  
   
   background("white");
   noStroke();
@@ -82,21 +84,17 @@ function draw() {
   //Depending on how many people are present, the max and min sizes
   //of the mountains are set, to avoid overflowing the canvas.
   //When people leave, the dynamic size updates smoothly
-  targetPlainsMultiplier = defaultPlainsMultiplier/constrain(centers.length*0.6,1, maxUsers);
   targetPeakMultiplier = defaultPeakMultiplier/constrain(centers.length*0.6,1, maxUsers);
   
   let peakAdjustmentSpeed = map(targetPeakMultiplier - peakMultiplier, 0, defaultPeakMultiplier, 0, 0.08);
-  let plainsAdjustmentSpeed = map(targetPlainsMultiplier - plainsMultiplier, 0, defaultPlainsMultiplier, 0, 0.08);
 
   peakMultiplier += peakAdjustmentSpeed;
-  plainsMultiplier += plainsAdjustmentSpeed;
 
   //Go through each horizontal point
   for (let i = 0; i < pointList.length; i++) {
     
-    //Set the base. If people are present, the base starts at 0.
-    //otherwise the base has the minimum value.
-    let base = centers.length > 0? 0 : plainsMultiplier;
+    //Set the base, the texture of the terrain with no mountains
+    let base = plainsMultiplier;
 
     //Go through each person
     centers.forEach(center => {
@@ -107,7 +105,7 @@ function draw() {
         mountainPeakWidth,
         mountainBaseWidth,
         peakMultiplier,
-        plainsMultiplier,
+        0,
         true
       );
     });
