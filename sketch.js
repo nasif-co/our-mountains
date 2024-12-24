@@ -1,28 +1,71 @@
+/* --------------------------------------------------------------
+ * Variables 
+ * -------------------------------------------------------------*/
+
+//Make true to see debugging view
+const debugging = false;
+
+//Basic structure of horizontal points distibuted evenly across the canvas width
 let basePoints = [];
+
+//How many basepoints to generate;
+const maxPoints = 300;
+
+//How many generative horizontal points to generate in each layer
 const points = 300;
+
+//Array that holds all the horizontal points of the current layer,
+//including both the basePoints and randomly generated ones
 let pointList = [];
-let video;
+
+//Incremental parameter for the noise() function
 let noiseTime = 0;
 
-const globalConfidence = 0.1;
+//History array containing arrays of x and y coordinates for each
+//vertex of every mountain. Most recent to oldest.
+let mountains = [];
 
+//How many mountains to save in history
+const historySize = 35;
+
+//How wide is the peak of each mountain
 const mountainPeakWidth = 20;
+
+//How wide is the base of each mountain
 const mountainBaseWidth = 200;
 
-let mountains = [];
-let centers = [];
+//How vertically distant to draw each mountain in the history
+const mountainGap = 30;
 
-const maxPoints = 300;
-const historySize = 50;
+//Sets the speed. How many frames before the history advances one mountainGap.
+const framesToRecord = 50;
 
-const defaultPeakMultiplier = 3;
-const plainsMultiplier = 0.1;
+//Used in the dynamic multiplier algorithm. How much taller is the peak vs the rest
+const defaultPeakMultiplier = 1;
 
+//Used in the dynamic multiplier algorithm. How much shorter to make the plains.
+const plainsMultiplier = -0.2;
+
+//This value gets updated instantly when new users are detected.
 let targetPeakMultiplier = defaultPeakMultiplier;
 
+//This value is a smoothed version of the targetPeakMultiplier.
 let peakMultiplier = defaultPeakMultiplier;
 
+//Used to cap the erotion of the peak multiplier. If we allow the
+//peak multiplier to be divided by an indefinite number of users,
+//when many users are present, the peak multiplier will become too small.
+//This value protects us from that scenario.
 const maxUsers = 5;
+
+//Camera input
+let video;
+
+//Minimum confidence level for the ml5 readings to be used
+const globalConfidence = 0.1;
+
+//Array that holds the center x position of each person detected
+let centers = [];
 
 function preload() {
   // Load the bodyPose model
@@ -56,28 +99,53 @@ function draw() {
   
   background("white");
   noStroke();
-  //History
-  // for (let i = mountains.length - 1; i >= 0; i--) {
-  //   fill(
-  //     lerpColor(color("rgb(134,142,255)"), color("white"), i / (height / 100))
-  //   );
-  //   beginShape();
-  //   let mountain = mountains[i];
-  //   for (let rock of mountain) {
-  //     // When frameCount hits 50, reset mountain position to its base height
-  //     if (frameCount % 50 == 0) {
-  //       vertex(rock.x, rock.y - 30 * (i+1));
-  //     } else {
-  //       // frameCount % 50 / 50: creates smooth 0-1 transition over 50 frames
-  //       vertex(rock.x, rock.y - 30 * (i) - 30 * (frameCount % 50) / 50);
-  //     }
-  //   }
-  //   vertex(width * 2, height);
-  //   vertex(0, height);
-  //   endShape(CLOSE);
-  // }
+  
+  /* --------------------------------------------------------------
+  * History
+  * -------------------------------------------------------------*/
+  for (let i = mountains.length - 1; i >= 0; i--) {
+    //In this cycle of animation, what color does this mountain start with
+    const colorStart = lerpColor(color("rgb(82, 93, 247)"), color("white"), i/(historySize - 1));
+    //In this cycle of animation, what color does this mountain end with
+    const colorEnd = lerpColor(color("rgb(82, 93, 247)"), color("white"), (i+1)/(historySize - 1));
 
-  //Current
+    //When hitting end of animation, set the mountain as its end color,
+    //which will now be its start color at the end of this draw when a 
+    //new mountain is added and this one moves back in history
+    if (frameCount % framesToRecord == 0) {
+      fill( colorEnd );
+    } else {
+      //Else, smoothly color it depending on its animation frame
+      fill(
+        lerpColor(
+          colorStart,
+          colorEnd,
+          (frameCount % framesToRecord)/framesToRecord
+        )
+      );
+    }
+    
+    beginShape();
+    let mountain = mountains[i];
+    for (let rock of mountain) {
+      // When frameCount hits end of animation, draw each mountain position one gap
+      // above, which will be the starting point as soon as the
+      // new mountain is added to the history at the end of this draw
+      if (frameCount % framesToRecord == 0) {
+        vertex(rock.x, rock.y - mountainGap*(i+1));
+      } else {
+        //ex: frameCount % 50 / 50: creates smooth 0-1 transition over 50 frames
+        vertex(rock.x, rock.y - mountainGap*(i) - mountainGap*(frameCount % framesToRecord) / framesToRecord);
+      }
+    }
+    vertex(width * 2, height);
+    vertex(0, height);
+    endShape(CLOSE);
+  }
+
+  /* --------------------------------------------------------------
+  * Current Mountain
+  * -------------------------------------------------------------*/
   let currentMountain = [];
 
   //Dynamic sizing attributes for the mountains
@@ -118,8 +186,10 @@ function draw() {
     //Finally, this calculated y is amplified to be more visible
     y = map(y, height, height - defaultPeakMultiplier, height + 1, 0);
 
+    //Gradient for the current mountain
     stroke(lerpColor('#00D6C4', '#9051FF', i/pointList.length));
     strokeWeight(8);
+
     if (i > 0) {  // Skip first point
       // Draw outline by connecting current point to previous point
       // Creates a continuous line that forms the mountain's outline 
@@ -134,20 +204,15 @@ function draw() {
     });
   }
 
-  // if (frameCount % 50 == 0) {
-  //   mountains.unshift(currentMountain);
-  //   mountains = mountains.splice(0, historySize);
-  //   setHorizontalPoints();
-  // }
+  if (frameCount % framesToRecord == 0) {
+    mountains.unshift(currentMountain);
+    mountains = mountains.splice(0, historySize);
+    setHorizontalPoints();
+  }
 
-  //
-  // for (let j = 0; j < centers.length; j++) {
-  //   stroke('green');
-  //   line(centers[j],0, centers[j], height);
-  // }
-
-  //Show fps for debugging
-  text("FPS: " + round(frameRate()) +" Q: " + quantity, 20, 20);
+  if(debugging) {
+    showDebugger();
+  }
 }
 
 function keyReleased() {
@@ -214,4 +279,15 @@ function gotPoses(results) {
       centers.push(center);
     }
   }
+}
+
+function showDebugger() {
+  stroke('green');
+  strokeWeight(1);
+  for (let j = 0; j < centers.length; j++) {
+    line(centers[j],0, centers[j], height);
+  }
+
+  //Show fps for debugging
+  text("FPS: " + round(frameRate()) +" Q: " + quantity, 20, 20);
 }
