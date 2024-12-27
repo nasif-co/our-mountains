@@ -3,7 +3,7 @@
  * -------------------------------------------------------------*/
 
 //Make true to see debugging view
-const debugging = true;
+const debugging = false;
 
 //Make mountains with the mouse or with ml5
 const mode = 'body'; //Either 'mouse' or 'body'
@@ -23,6 +23,10 @@ let pointList = [];
 
 //Incremental parameter for the noise() function
 let noiseTime = 0;
+
+//Array that contains object literals with the x and y coordinate for each
+//vertex of the current mountain
+let currentMountain = [];
 
 //History array containing arrays of x and y coordinates for each
 //vertex of every mountain. Most recent to oldest.
@@ -44,7 +48,7 @@ const maxMountainHeight = window.innerHeight*0.6;
 const mountainGap = 30;
 
 //Sets the speed. How many frames before the history advances one mountainGap.
-const framesToRecord = 50;
+const framesToRecord = 100;
 
 //Used in the dynamic multiplier algorithm. How much taller is the peak vs the rest
 const defaultPeakMultiplier = 1;
@@ -68,10 +72,18 @@ const maxUsers = 5;
 let video;
 
 //Minimum confidence level for the ml5 readings to be used
-const globalConfidence = 0.1;
+const globalConfidence = 0.2;
 
 //Array that holds the center x position of each person detected
 let centers = [];
+
+//How much to smooth the mountain height values. 
+const smoothingRate = 0.9; //A float between 0 and 1 (excluding 1). 0 is no smoothing. 0.99999 is a lot of smoothing.
+
+//ml5 readings get inconsistent when a person is too close to the edge
+//of the camera. This value defines safe margins left and right, to ignore
+//values that are captured in these areas.
+const safetyMargin = 0;
 
 function preload() {
   if(mode == 'body'){
@@ -158,7 +170,6 @@ function draw() {
   /* --------------------------------------------------------------
   * Current Mountain
   * -------------------------------------------------------------*/
-  let currentMountain = [];
 
   //Dynamic sizing attributes for the mountains
   //Depending on how many people are present, the max and min sizes
@@ -198,6 +209,27 @@ function draw() {
     //Finally, this calculated y is amplified to be more visible
     y = map(y, height, height - defaultPeakMultiplier, height - 1, height - maxMountainHeight);
 
+    //Smoothing of the mountain height:
+
+    //If the current mountain is being drawn for the first time
+    if(currentMountain.length <= i) {
+      //Set the values of x and y as calculated
+      currentMountain[i] = {
+        x: pointList[i],
+        y: height - plainsMultiplier,
+      };
+    } else {
+      //If this mountain was already drawn once,
+      //smooth (running average) the y of the mountain using the
+      //previous values and the new value.
+      //The amount of smoothing is controlled by the smoothingRate constant
+      currentMountain[i] = {
+        x: pointList[i],
+        y: currentMountain[i].y*smoothingRate + y*(1 - smoothingRate),
+      };
+    }
+
+    //Draw the current mountain
     //Gradient for the current mountain
     stroke(lerpColor('#00D6C4', '#9051FF', i/pointList.length));
     strokeWeight(8);
@@ -205,21 +237,17 @@ function draw() {
     if (i > 0) {  // Skip first point
       // Draw outline by connecting current point to previous point
       // Creates a continuous line that forms the mountain's outline 
-      line(pointList[i], y, currentMountain[i-1].x, currentMountain[i-1].y);
+      line(pointList[i], currentMountain[i].y, currentMountain[i-1].x, currentMountain[i-1].y);
     }
-    line(pointList[i], height, pointList[i], y);
+    line(pointList[i], height, pointList[i], currentMountain[i].y);
     noStroke();
-    
-    currentMountain.push({
-      x: pointList[i],
-      y: y,
-    });
   }
 
   if (frameCount % framesToRecord == 0) {
     mountains.unshift(currentMountain);
     mountains = mountains.splice(0, historySize);
     setHorizontalPoints();
+    currentMountain = [];
   }
 
   if(debugging) {
@@ -254,50 +282,48 @@ function gotPoses(results) {
   for (let i = 0; i < poses.length; i++) {
     let person = poses[i];
     let center = false;
-    if (person.nose.confidence > globalConfidence) {
-      center = person.nose.x;
-    } else if (
+    if (person.nose.confidence > globalConfidence && 
       person.right_eye.confidence > globalConfidence &&
-      person.left_eye.confidence > globalConfidence
-    ) {
-      center = person.right_eye.x - person.left_eye.x;
-      const person_span = person.right_eye.x - person.left_eye.x;
-      center = person.left_eye.x + person_span / 2;
-    } else if (
-      person.right_shoulder.confidence > globalConfidence &&
-      person.left_shoulder.confidence > globalConfidence
-    ) {
-      center = person.right_shoulder.x - person.left_shoulder.x;
-      const person_span = person.right_shoulder.x - person.left_shoulder.x;
-      center = person.left_shoulder.x + person_span / 2;
-    } else {
-      let minX = Infinity;
-      let maxX = -Infinity;
-      person.keypoints.forEach((keypoint) => {
-        if (keypoint.confidence > 0.1) {
-          minX = min(minX, keypoint.x);
-          maxX = max(maxX, keypoint.x);
-        }
-      });
-      const person_span = maxX - minX;
-      center = minX + person_span / 2;
-    }
+      person.left_eye.confidence > globalConfidence) {
+      center = person.nose.x;
+    } 
+    // else if (
+    //   person.right_eye.confidence > globalConfidence &&
+    //   person.left_eye.confidence > globalConfidence
+    // ) {
+    //   const person_span = person.right_eye.x - person.left_eye.x;
+    //   center = person.left_eye.x + person_span / 2;
+    // } 
+    // else if (
+    //   person.right_shoulder.confidence > globalConfidence &&
+    //   person.left_shoulder.confidence > globalConfidence
+    // ) {
+    //   const person_span = person.right_shoulder.x - person.left_shoulder.x;
+    //   center = person.left_shoulder.x + person_span / 2;
+    // }
 
-    if (center !== false) {
+    if (center !== false && center > safetyMargin && center < width - safetyMargin) {
       centers.push(center);
     }
   }
 }
 
 function showDebugger() {
+
+  //Draw the middle line of each person
   stroke('lime');
   strokeWeight(1);
   for (let j = 0; j < centers.length; j++) {
     line(centers[j],0, centers[j], height);
   }
 
-  //Show fps for debugging
+  //Draw the safety margins
+  fill(252, 223, 3, 100);
   noStroke();
+  rect(0,0, safetyMargin, height);
+  rect(width - safetyMargin,0, safetyMargin, height);
+
+  //Show fps for debugging
   fill('black');
   text("FPS: " + round(frameRate()), 20, 20);
 }
