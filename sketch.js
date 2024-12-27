@@ -3,7 +3,10 @@
  * -------------------------------------------------------------*/
 
 //Make true to see debugging view
-const debugging = false;
+const debugging = true;
+
+//Make mountains with the mouse or with ml5
+const mode = 'body'; //Either 'mouse' or 'body'
 
 //Basic structure of horizontal points distibuted evenly across the canvas width
 let basePoints = [];
@@ -33,6 +36,9 @@ const mountainPeakWidth = 20;
 
 //How wide is the base of each mountain
 const mountainBaseWidth = 200;
+
+//Define the maximum height of the mountain
+const maxMountainHeight = window.innerHeight*0.6;
 
 //How vertically distant to draw each mountain in the history
 const mountainGap = 30;
@@ -68,34 +74,40 @@ const globalConfidence = 0.1;
 let centers = [];
 
 function preload() {
-  // Load the bodyPose model
-  //bodyPose = ml5.bodyPose({ flipped: true });
+  if(mode == 'body'){
+    // Load the bodyPose model
+    bodyPose = ml5.bodyPose({ flipped: true });
+  }
 }
 
 function setup() {
-  createCanvas(windowWidth, windowHeight);
+  const p5canvas = createCanvas(windowWidth, windowHeight);
+  p5canvas.id('p5canvas');
+
   for (let i = 1; i <= maxPoints; i++) {
     basePoints[i - 1] = ((i - 1) * width) / maxPoints;
   }
   setHorizontalPoints();
 
-  video = createCapture({ flipped: true, video: true, audio: false });
-  video.size(windowWidth, windowHeight);
-  video.hide();
-  //bodyPose.detectStart(video, gotPoses);
+  if(mode == 'body'){
+    video = createCapture({ flipped: true, video: true, audio: false });
+    video.size(windowWidth, windowHeight);
+    video.hide();
+    bodyPose.detectStart(video, gotPoses);
+  }
+
   textSize(40);
   textAlign(LEFT, TOP);
 }
 
 function draw() {
-  centers = [];
-  for (let k = 0; k < quantity; k++) {
-    centers.push(k*width/quantity);
+  if(mode == 'mouse') {
+    centers = [];
+    //Only if the mouse is over the sketch
+    if( window.p5canvas.matches(':hover') ){
+      centers = [mouseX];
+    }
   }
-  if(mouseX > 100 && mouseX < width - 100) {
-    centers.push(mouseX);
-  }
-  
   
   background("white");
   noStroke();
@@ -184,7 +196,7 @@ function draw() {
     //of each person 
     let y = height - noise(i * 0.005 + noiseTime) * base;
     //Finally, this calculated y is amplified to be more visible
-    y = map(y, height, height - defaultPeakMultiplier, height + 1, 0);
+    y = map(y, height, height - defaultPeakMultiplier, height - 1, height - maxMountainHeight);
 
     //Gradient for the current mountain
     stroke(lerpColor('#00D6C4', '#9051FF', i/pointList.length));
@@ -216,13 +228,9 @@ function draw() {
 }
 
 function keyReleased() {
-  setHorizontalPoints();
-}
-
-let quantity = 0;
-
-function mouseReleased() {
-  quantity++;
+  if (key === ' ') {
+    saveCanvas();
+  }
 }
 
 function setHorizontalPoints() {
@@ -282,12 +290,14 @@ function gotPoses(results) {
 }
 
 function showDebugger() {
-  stroke('green');
+  stroke('lime');
   strokeWeight(1);
   for (let j = 0; j < centers.length; j++) {
     line(centers[j],0, centers[j], height);
   }
 
   //Show fps for debugging
-  text("FPS: " + round(frameRate()) +" Q: " + quantity, 20, 20);
+  noStroke();
+  fill('black');
+  text("FPS: " + round(frameRate()), 20, 20);
 }
