@@ -3,10 +3,10 @@
  * -------------------------------------------------------------*/
 
 //Make true to see debugging view
-const debugging = false;
+let debugging = true;
 
 //Make mountains with the mouse or with ml5
-const mode = 'body'; //Either 'mouse' or 'body'
+const mode = 'mouse'; //Either 'mouse' or 'body'
 
 //Basic structure of horizontal points distibuted evenly across the canvas width
 let basePoints = [];
@@ -35,6 +35,9 @@ let mountains = [];
 //How many mountains to save in history
 const historySize = 35;
 
+//Whether the last mountain added to the history came from a user or from idle movement
+let lastMountainWasIdle = true;
+
 //How wide is the peak of each mountain
 const mountainPeakWidth = 20;
 
@@ -43,12 +46,6 @@ const mountainBaseWidth = 200;
 
 //Define the maximum height of the mountain
 const maxMountainHeight = window.innerHeight*0.6;
-
-//How vertically distant to draw each mountain in the history
-const mountainGap = 30;
-
-//Sets the speed. How many frames before the history advances one mountainGap.
-const framesToRecord = 100;
 
 //Used in the dynamic multiplier algorithm. How much taller is the peak vs the rest
 const defaultPeakMultiplier = 1;
@@ -67,6 +64,24 @@ let peakMultiplier = defaultPeakMultiplier;
 //when many users are present, the peak multiplier will become too small.
 //This value protects us from that scenario.
 const maxUsers = 5;
+
+//How vertically distant to draw each mountain in the history
+const mountainGap = 30; //30
+
+//Sets the speed. How many frames before the history advances one mountainGap.
+const framesToRecord = 100; //100
+
+//At the beginning of every cycle of animation, a new mountain rises from the bottom
+//In a timeline from 0 to 1, these two values define when the mountain starts to rise and
+//when it has risen completely
+const terraformStart = 0.2; //0.2
+const terraformComplete = 0.4; //0.4
+
+//Color variables, initialized in setup
+let historyColorStart;
+let historyColorEnd;
+let currentColor;
+let snapshotColor;
 
 //Camera input
 let video;
@@ -93,6 +108,12 @@ function preload() {
 }
 
 function setup() {
+  //Set colors
+  historyColorStart = color("rgb(82, 93, 247)");
+  historyColorEnd = color('white');
+  snapshotColor = color('white');
+  currentColor = color('blue');
+
   const p5canvas = createCanvas(windowWidth, windowHeight);
   p5canvas.id('p5canvas');
 
@@ -110,6 +131,12 @@ function setup() {
 
   textSize(40);
   textAlign(LEFT, TOP);
+  strokeJoin(ROUND);
+
+  //Check if debugging is on from last refresh
+  if(localStorage.getItem('debugging') != null) {
+    debugging = (localStorage.getItem('debugging') === 'true');
+  }
 }
 
 function draw() {
@@ -120,50 +147,61 @@ function draw() {
       centers = [mouseX];
     }
   }
+
+  //Guides the animation cycles
+  const animationPlayhead = (frameCount%framesToRecord/framesToRecord);
   
   background("white");
-  noStroke();
+  strokeWeight(8);
   
   /* --------------------------------------------------------------
   * History
   * -------------------------------------------------------------*/
+  
   for (let i = mountains.length - 1; i >= 0; i--) {
     //In this cycle of animation, what color does this mountain start with
-    const colorStart = lerpColor(color("rgb(82, 93, 247)"), color("white"), i/(historySize - 1));
+    let colorStart = lerpColor(historyColorStart, historyColorEnd, i/(historySize - 1));
     //In this cycle of animation, what color does this mountain end with
-    const colorEnd = lerpColor(color("rgb(82, 93, 247)"), color("white"), (i+1)/(historySize - 1));
+    const colorEnd = lerpColor(historyColorStart, historyColorEnd, (i+1)/(historySize - 1));
+
+    if( i == 0 && !lastMountainWasIdle){
+      colorStart = snapshotColor;
+    }
 
     //When hitting end of animation, set the mountain as its end color,
     //which will now be its start color at the end of this draw when a 
     //new mountain is added and this one moves back in history
     if (frameCount % framesToRecord == 0) {
       fill( colorEnd );
+      stroke( colorEnd );
     } else {
       //Else, smoothly color it depending on its animation frame
-      fill(
-        lerpColor(
-          colorStart,
-          colorEnd,
-          (frameCount % framesToRecord)/framesToRecord
-        )
+      const currentColor = lerpColor(
+        colorStart,
+        colorEnd,
+        animationPlayhead,
       );
+      fill( currentColor );
+      stroke( currentColor );
     }
     
     beginShape();
     let mountain = mountains[i];
     for (let rock of mountain) {
       // When frameCount hits end of animation, draw each mountain position one gap
-      // above, which will be the starting point as soon as the
+      // above (meaning i+2 instead of i+1), which will be the starting point as soon as the
       // new mountain is added to the history at the end of this draw
       if (frameCount % framesToRecord == 0) {
-        vertex(rock.x, rock.y - mountainGap*(i+1));
+        vertex(rock.x, rock.y - mountainGap*(i+2));
       } else {
         //ex: frameCount % 50 / 50: creates smooth 0-1 transition over 50 frames
-        vertex(rock.x, rock.y - mountainGap*(i) - mountainGap*(frameCount % framesToRecord) / framesToRecord);
+        vertex(rock.x, rock.y - mountainGap*(i+1) - mountainGap*animationPlayhead);
+        //i+1 because we want the history to start one mountainGap above the bottom edge.
+        //if we did just i, it would start at the bottom edge, where new mountains start
       }
     }
-    vertex(width * 2, height);
-    vertex(0, height);
+    vertex(width * 2, height*2);
+    vertex(0, height*2);
     endShape(CLOSE);
   }
 
@@ -180,6 +218,17 @@ function draw() {
   let peakAdjustmentSpeed = map(targetPeakMultiplier - peakMultiplier, 0, defaultPeakMultiplier, 0, 0.08);
 
   peakMultiplier += peakAdjustmentSpeed;
+
+  let targetColor = color('blue');
+  if(centers.length == 0) {
+    targetColor = color("rgb(82, 93, 247)");
+  }
+
+  currentColor = lerpColor(currentColor, targetColor, 0.2);
+  
+  fill(currentColor);
+  stroke(currentColor);
+  beginShape();
 
   //Go through each horizontal point
   for (let i = 0; i < pointList.length; i++) {
@@ -216,7 +265,7 @@ function draw() {
       //Set the values of x and y as calculated
       currentMountain[i] = {
         x: pointList[i],
-        y: height - plainsMultiplier,
+        y: y, //height - plainsMultiplier,
       };
     } else {
       //If this mountain was already drawn once,
@@ -229,25 +278,29 @@ function draw() {
       };
     }
 
-    //Draw the current mountain
-    //Gradient for the current mountain
-    stroke(lerpColor('#00D6C4', '#9051FF', i/pointList.length));
-    strokeWeight(8);
+    //Animates the upward motion of the current mountains
+    let displayOffset = -mountainGap*animationPlayhead;
 
-    if (i > 0) {  // Skip first point
-      // Draw outline by connecting current point to previous point
-      // Creates a continuous line that forms the mountain's outline 
-      line(pointList[i], currentMountain[i].y, currentMountain[i-1].x, currentMountain[i-1].y);
+    if (animationPlayhead <= terraformComplete) {
+      displayOffset = map(animationPlayhead, 0, terraformComplete, mountainGap, -mountainGap*terraformComplete);
     }
-    line(pointList[i], height, pointList[i], currentMountain[i].y);
-    noStroke();
+
+    let scaler = easeInOutCubic(map(constrain(animationPlayhead, terraformStart, terraformComplete), terraformStart, terraformComplete, 0, 1));
+    
+    //Draw the current mountain's vertex that was just calculated
+    vertex(pointList[i], (currentMountain[i].y - height)*scaler + height + displayOffset);
   }
+  vertex(width * 2, height*2);
+  vertex(0, height*2);
+  endShape(CLOSE);
 
   if (frameCount % framesToRecord == 0) {
     mountains.unshift(currentMountain);
     mountains = mountains.splice(0, historySize);
     setHorizontalPoints();
     currentMountain = [];
+
+    lastMountainWasIdle = centers.length == 0;
   }
 
   if(debugging) {
@@ -258,6 +311,9 @@ function draw() {
 function keyReleased() {
   if (key === ' ') {
     saveCanvas();
+  }else if (key === 'd') {
+    debugging = !debugging;
+    localStorage.setItem('debugging', debugging);
   }
 }
 
@@ -309,7 +365,6 @@ function gotPoses(results) {
 }
 
 function showDebugger() {
-
   //Draw the middle line of each person
   stroke('lime');
   strokeWeight(1);
@@ -326,4 +381,9 @@ function showDebugger() {
   //Show fps for debugging
   fill('black');
   text("FPS: " + round(frameRate()), 20, 20);
+}
+
+//From https://easings.net/#easeInOutCubic
+function easeInOutCubic(x) {
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
 }
