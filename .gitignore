@@ -1,2 +1,4 @@
 p5.min.js
 .vscode
+node_modules
+libs
