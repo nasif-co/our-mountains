@@ -173,6 +173,7 @@ function setup() {
   setHorizontalPoints();
 
   if(mode == 'body'){
+    requestCameraPermission().then(() => {
     navigator.mediaDevices.enumerateDevices().then((devices) => {
       cameras = devices.filter(device => device.kind === 'videoinput');
       createDropdown();
@@ -185,6 +186,10 @@ function setup() {
     //video.size(windowWidth, windowHeight);
     //video.hide();
     //bodyPose.detectStart(video, gotPoses);
+  }).catch((err) => {
+    console.error('Permission denied or error:', err);
+    alert('Camera permission is required to access cameras.');
+  });
   }
 
   
@@ -203,6 +208,15 @@ function setup() {
   }
 }
 
+function requestCameraPermission() {
+  return navigator.mediaDevices.getUserMedia({ video: true })
+    .then((stream) => {
+      // Stop the temporary stream
+      stream.getTracks().forEach(track => track.stop());
+      console.log('Permission granted');
+    });
+}
+
 function createDropdown() {
   dropdown = window.camerapicker;
   cameras.forEach((camera, index) => {
@@ -216,11 +230,6 @@ function createDropdown() {
     const selectedDeviceId = dropdown.value();
     initializeCamera(selectedDeviceId);
   });
-
-  // dropdown.changed(() => {
-  //   const selectedDeviceId = dropdown.value();
-  //   initializeCamera(selectedDeviceId);
-  // });
 }
 
 function initializeCamera(deviceId) {
