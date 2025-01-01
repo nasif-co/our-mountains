@@ -182,10 +182,6 @@ function setup() {
         initializeCamera(cameras[0].deviceId);
       }
     });
-    //video = createCapture({ flipped: true, video: true, audio: false });
-    //video.size(windowWidth, windowHeight);
-    //video.hide();
-    //bodyPose.detectStart(video, gotPoses);
   }).catch((err) => {
     console.error('Permission denied or error:', err);
     alert('Camera permission is required to access cameras.');
@@ -458,21 +454,6 @@ function gotPoses(results) {
       person.left_eye.confidence > globalConfidence) {
       center = person.nose.x;
     } 
-    // else if (
-    //   person.right_eye.confidence > globalConfidence &&
-    //   person.left_eye.confidence > globalConfidence
-    // ) {
-    //   const person_span = person.right_eye.x - person.left_eye.x;
-    //   center = person.left_eye.x + person_span / 2;
-    // } 
-    // else if (
-    //   person.right_shoulder.confidence > globalConfidence &&
-    //   person.left_shoulder.confidence > globalConfidence
-    // ) {
-    //   const person_span = person.right_shoulder.x - person.left_shoulder.x;
-    //   center = person.left_shoulder.x + person_span / 2;
-    // }
-
     if (center !== false && center > safetyMargin && center < width - safetyMargin) {
       centers.push(center);
     }
