@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "main.js",
   "scripts": {
+    "start": "electron .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "nasif.co & jiyou park",
@@ -10,5 +11,8 @@
   "description": "",
   "dependencies": {
     "p5": "^1.11.2"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1"
   }
 }
