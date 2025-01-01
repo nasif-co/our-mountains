@@ -2,12 +2,6 @@
  * Variables 
  * -------------------------------------------------------------*/
 
-//Make true to see debugging view
-let debugging = true;
-
-//Make mountains with the mouse or with ml5
-const mode = 'mouse'; //Either 'mouse' or 'body'
-
 //Basic structure of horizontal points distibuted evenly across the canvas width
 let basePoints = [];
 
@@ -33,7 +27,7 @@ let currentMountain = [];
 let mountains = [];
 
 //How many mountains to save in history
-const historySize = 35;
+let historySize = 35;
 
 //Whether the last mountain added to the history came from a user or from idle movement
 let lastMountainWasIdle = true;
@@ -45,7 +39,8 @@ const mountainPeakWidth = 20;
 const mountainBaseWidth = 200;
 
 //Define the maximum height of the mountain
-const maxMountainHeight = window.innerHeight*0.6;
+let peakHeightPercent = 0.6
+let maxMountainHeight = window.innerHeight*peakHeightPercent;
 
 //Used in the dynamic multiplier algorithm. How much taller is the peak vs the rest
 const defaultPeakMultiplier = 1;
@@ -66,16 +61,16 @@ let peakMultiplier = defaultPeakMultiplier;
 const maxUsers = 5;
 
 //How vertically distant to draw each mountain in the history
-const mountainGap = 30; //30
+let mountainGap = 30; //30
 
 //Sets the speed. How many frames before the history advances one mountainGap.
-const framesToRecord = 100; //100
+let framesToRecord = 100; //100
 
 //At the beginning of every cycle of animation, a new mountain rises from the bottom
 //In a timeline from 0 to 1, these two values define when the mountain starts to rise and
 //when it has risen completely
-const terraformStart = 0.2; //0.2
-const terraformComplete = 0.4; //0.4
+const terraformStart = 0; //0.2
+const terraformComplete = 0.2; //0.4
 
 //Color variables, initialized in setup
 let historyColorStart;
@@ -100,6 +95,37 @@ const smoothingRate = 0.9; //A float between 0 and 1 (excluding 1). 0 is no smoo
 //values that are captured in these areas.
 const safetyMargin = 0;
 
+
+//Make true to see debugging view
+let debugging = false;
+
+//Make mountains with the mouse or with ml5
+const mode = 'body'; //Either 'mouse' or 'body'
+
+//Connect with debugger ui
+const fpsDisplay = window.fpsdisplay;
+const historySizeDisplay = window.historysize;
+historySizeDisplay.addEventListener('change', updateConstants);
+const cycledisplay = window.cyclelength;
+cycledisplay.addEventListener('change', updateConstants);
+const gapsize = window.gap;
+gapsize.addEventListener('change', updateConstants);
+const peaksize = window.peaks;
+peaksize.addEventListener('change', updateConstants);
+
+const closeButton = window.debugclose;
+closeButton.addEventListener('click', function() {
+  debugging = false
+  localStorage.setItem('debugging', debugging);
+  window.debugger.classList.remove('debug-on');
+});
+const resetButton = window.sketchreset;
+resetButton.addEventListener('click', function(){window.location.reload();});
+const saveButton = window.saveconstants;
+saveButton.addEventListener('click', saveConstants);
+const defaultsButton = window.defaultconstants;
+defaultsButton.addEventListener('click', defaultConstants);
+
 function preload() {
   if(mode == 'body'){
     // Load the bodyPose model
@@ -114,6 +140,30 @@ function setup() {
   snapshotColor = color('white');
   currentColor = color('blue');
 
+
+  //Get saved constants from localStorage
+  if(localStorage.getItem("historySize") !== null) {
+    historySize = parseInt(localStorage.getItem("historySize"));
+  }
+  historySizeDisplay.value = historySize;
+
+  if(localStorage.getItem("cycleLength") !== null) {
+    framesToRecord = parseInt(localStorage.getItem("cycleLength"));
+  }
+  cycledisplay.value = framesToRecord;
+
+  if(localStorage.getItem("gapSize") !== null) {
+    mountainGap = parseInt(localStorage.getItem("gapSize"));
+  }
+  gapsize.value = mountainGap;
+
+  if(localStorage.getItem("peakSize") !== null) {
+    peakHeightPercent = parseFloat(localStorage.getItem("peakSize"));
+    maxMountainHeight = window.innerHeight*peakHeightPercent;
+  }
+  peaksize.value = peakHeightPercent;
+
+
   const p5canvas = createCanvas(windowWidth, windowHeight);
   p5canvas.id('p5canvas');
 
@@ -123,20 +173,76 @@ function setup() {
   setHorizontalPoints();
 
   if(mode == 'body'){
-    video = createCapture({ flipped: true, video: true, audio: false });
-    video.size(windowWidth, windowHeight);
-    video.hide();
-    bodyPose.detectStart(video, gotPoses);
+    requestCameraPermission().then(() => {
+    navigator.mediaDevices.enumerateDevices().then((devices) => {
+      cameras = devices.filter(device => device.kind === 'videoinput');
+      createDropdown();
+      // Use the first camera by default
+      if (cameras.length > 0) {
+        initializeCamera(cameras[0].deviceId);
+      }
+    });
+  }).catch((err) => {
+    console.error('Permission denied or error:', err);
+    alert('Camera permission is required to access cameras.');
+  });
   }
 
-  textSize(40);
-  textAlign(LEFT, TOP);
+  
+
   strokeJoin(ROUND);
 
   //Check if debugging is on from last refresh
   if(localStorage.getItem('debugging') != null) {
     debugging = (localStorage.getItem('debugging') === 'true');
   }
+
+  if(debugging) {
+    window.debugger.classList.add('debug-on');
+  }else {
+    window.debugger.classList.remove('debug-on');
+  }
+}
+
+function requestCameraPermission() {
+  return navigator.mediaDevices.getUserMedia({ video: true })
+    .then((stream) => {
+      // Stop the temporary stream
+      stream.getTracks().forEach(track => track.stop());
+      console.log('Permission granted');
+    });
+}
+
+function createDropdown() {
+  dropdown = window.camerapicker;
+  cameras.forEach((camera, index) => {
+    const option = document.createElement('option');
+    option.textContent =  camera.label || `Camera ${index + 1}`;
+    option.setAttribute('value', camera.deviceId);
+    dropdown.appendChild(option);
+  });
+
+  dropdown.addEventListener('change', function() {
+    const selectedDeviceId = dropdown.value();
+    initializeCamera(selectedDeviceId);
+  });
+}
+
+function initializeCamera(deviceId) {
+  if (video) {
+    video.remove();
+    bodypose.detectStop();
+  }
+  video = createCapture({
+    flipped: true,
+    audio: false,
+    video: {
+      deviceId: { exact: deviceId }
+    }
+  });
+  video.size(width, height);
+  video.hide();
+  bodyPose.detectStart(video, gotPoses);
 }
 
 function draw() {
@@ -314,6 +420,11 @@ function keyReleased() {
   }else if (key === 'd') {
     debugging = !debugging;
     localStorage.setItem('debugging', debugging);
+    if(debugging) {
+      window.debugger.classList.add('debug-on');
+    }else {
+      window.debugger.classList.remove('debug-on');
+    }
   }
 }
 
@@ -343,21 +454,6 @@ function gotPoses(results) {
       person.left_eye.confidence > globalConfidence) {
       center = person.nose.x;
     } 
-    // else if (
-    //   person.right_eye.confidence > globalConfidence &&
-    //   person.left_eye.confidence > globalConfidence
-    // ) {
-    //   const person_span = person.right_eye.x - person.left_eye.x;
-    //   center = person.left_eye.x + person_span / 2;
-    // } 
-    // else if (
-    //   person.right_shoulder.confidence > globalConfidence &&
-    //   person.left_shoulder.confidence > globalConfidence
-    // ) {
-    //   const person_span = person.right_shoulder.x - person.left_shoulder.x;
-    //   center = person.left_shoulder.x + person_span / 2;
-    // }
-
     if (center !== false && center > safetyMargin && center < width - safetyMargin) {
       centers.push(center);
     }
@@ -379,11 +475,73 @@ function showDebugger() {
   rect(width - safetyMargin,0, safetyMargin, height);
 
   //Show fps for debugging
-  fill('black');
-  text("FPS: " + round(frameRate()), 20, 20);
+  fpsDisplay.textContent = round(frameRate());
 }
 
 //From https://easings.net/#easeInOutCubic
 function easeInOutCubic(x) {
   return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+}
+
+function updateConstants(e) {
+  const elmnt = e.currentTarget;
+
+  switch (elmnt.id) {
+    case 'historysize':
+      var val = parseInt(elmnt.value);
+      //validate
+      if( !isNaN(val) && val >= 5 && val <= 600){
+        historySize = val;
+        saveButton.disabled = false;
+        resetButton.disabled = false;
+      }
+      break;
+    case 'cyclelength':
+      var val = parseInt(elmnt.value);
+      //validate
+      if( !isNaN(val) && val >= 1 && val <= 600){
+        framesToRecord = val;
+        saveButton.disabled = false;
+        resetButton.disabled = false;
+      }
+      break;
+    case 'gap':
+      var val = parseInt(elmnt.value);
+      //validate
+      if( !isNaN(val) ){
+        mountainGap = val;
+        saveButton.disabled = false;
+        resetButton.disabled = false;
+      }
+      break;
+    case 'peaks':
+      var val = parseFloat(elmnt.value);
+      //validate
+      if( !isNaN(val) && val >= 0.1 && val <= 0.95){
+        peakHeightPercent = val;
+        maxMountainHeight = window.innerHeight*peakHeightPercent;
+        saveButton.disabled = false;
+        resetButton.disabled = false;
+      }
+      break;
+  }
+}
+
+function saveConstants() {
+  localStorage.setItem("historySize", historySize);
+  localStorage.setItem("cycleLength", framesToRecord);
+  localStorage.setItem("gapSize", mountainGap);
+  localStorage.setItem("peakSize", peakHeightPercent); 
+
+  saveButton.disabled = true;
+  resetButton.disabled = true;
+}
+
+function defaultConstants() {
+  localStorage.removeItem('historySize');
+  localStorage.removeItem('cycleLength');
+  localStorage.removeItem('gapSize');
+  localStorage.removeItem('peakSize');
+
+  window.location.reload();
 }
