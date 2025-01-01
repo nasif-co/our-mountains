@@ -173,11 +173,21 @@ function setup() {
   setHorizontalPoints();
 
   if(mode == 'body'){
-    video = createCapture({ flipped: true, video: true, audio: false });
-    video.size(windowWidth, windowHeight);
-    video.hide();
-    bodyPose.detectStart(video, gotPoses);
+    navigator.mediaDevices.enumerateDevices().then((devices) => {
+      cameras = devices.filter(device => device.kind === 'videoinput');
+      createDropdown();
+      // Use the first camera by default
+      if (cameras.length > 0) {
+        initializeCamera(cameras[0].deviceId);
+      }
+    });
+    //video = createCapture({ flipped: true, video: true, audio: false });
+    //video.size(windowWidth, windowHeight);
+    //video.hide();
+    //bodyPose.detectStart(video, gotPoses);
   }
+
+  
 
   strokeJoin(ROUND);
 
@@ -191,6 +201,43 @@ function setup() {
   }else {
     window.debugger.classList.remove('debug-on');
   }
+}
+
+function createDropdown() {
+  dropdown = window.camerapicker;
+  cameras.forEach((camera, index) => {
+    const option = document.createElement('option');
+    option.textContent =  camera.label || `Camera ${index + 1}`;
+    option.setAttribute('value', camera.deviceId);
+    dropdown.appendChild(option);
+  });
+
+  dropdown.addEventListener('change', function() {
+    const selectedDeviceId = dropdown.value();
+    initializeCamera(selectedDeviceId);
+  });
+
+  // dropdown.changed(() => {
+  //   const selectedDeviceId = dropdown.value();
+  //   initializeCamera(selectedDeviceId);
+  // });
+}
+
+function initializeCamera(deviceId) {
+  if (video) {
+    video.remove();
+    bodypose.detectStop();
+  }
+  video = createCapture({
+    flipped: true,
+    audio: false,
+    video: {
+      deviceId: { exact: deviceId }
+    }
+  });
+  video.size(width, height);
+  video.hide();
+  bodyPose.detectStart(video, gotPoses);
 }
 
 function draw() {

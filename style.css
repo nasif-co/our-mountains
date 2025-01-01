@@ -107,3 +107,15 @@ button:disabled {
 button:not(:first-of-type) {
   margin-top: -5px;
 }
+
+label[for=camerapicker] {
+  grid-column: span 2;
+}
+
+label[for=camerapicker] select {
+  font-family: inherit;
+  width: 26ch;
+  text-transform: uppercase;
+  background-color: transparent;
+  text-overflow: ellipsis;
+}
