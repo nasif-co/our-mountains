@@ -548,3 +548,10 @@ function defaultConstants() {
 
   window.location.reload();
 }
+
+//Close app on hitting the esc key
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+      window.close(); // Close the window (triggers app quit)
+  }
+});
