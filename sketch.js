@@ -33,10 +33,10 @@ let historySize = 35;
 let lastMountainWasIdle = true;
 
 //How wide is the peak of each mountain
-const mountainPeakWidth = 20;
+const mountainPeakWidth = Math.round(0.025*window.innerWidth); //20
 
 //How wide is the base of each mountain
-const mountainBaseWidth = 200;
+const mountainBaseWidth =  Math.round(0.20*window.innerWidth); //200
 
 //Define the maximum height of the mountain
 let peakHeightPercent = 0.6
@@ -253,6 +253,9 @@ function draw() {
       centers = [mouseX];
     }
   }
+
+  //Avoid showing the land under the mountain when taking the snapshot
+  translate(0, mountainGap);
 
   //Guides the animation cycles
   const animationPlayhead = (frameCount%framesToRecord/framesToRecord);
