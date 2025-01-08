@@ -119,6 +119,10 @@ const peaksize = window.peaks;
 peaksize.addEventListener('change', updateConstants);
 const mountWidth = window.mountwidth;
 mountWidth.addEventListener('change', updateConstants);
+const pxdensity = window.pixeldensity;
+pxdensity.addEventListener('change', updateConstants);
+
+let pixelDense = 1;
 
 const closeButton = window.debugclose;
 closeButton.addEventListener('click', function() {
@@ -143,7 +147,7 @@ function preload() {
 function setup() {
   //Set colors
   historyColorStart = color("rgb(0, 12, 177)");
-  historyColorEnd = color("rgb(255, 248, 242)");
+  historyColorEnd = color("rgb(255,248,242)");
   snapshotColor = color('white');
   currentColor = color("rgb(0, 12, 177)");
   activeColor = color("rgb(0, 9, 129)");
@@ -179,6 +183,12 @@ function setup() {
     mountainPeakWidth = Math.round(peakWidthRatio*window.innerWidth);
   }
   mountWidth.value = baseWidthRatio;
+
+  if(localStorage.getItem("pixelDensity") !== null) {
+    pixelDense = parseFloat(localStorage.getItem("pixelDensity"));
+  }
+  pxdensity.value = pixelDense;
+  pixelDensity(pixelDense);
 
 
   const p5canvas = createCanvas(windowWidth, windowHeight);
@@ -277,7 +287,7 @@ function draw() {
   //Guides the animation cycles
   const animationPlayhead = (frameCount%framesToRecord/framesToRecord);
   
-  background(historyColorEnd);
+  background(fogColor);
   strokeWeight(8);
   
   /* --------------------------------------------------------------
@@ -333,7 +343,7 @@ function draw() {
     endShape(CLOSE);
 
     /* Fog between mountains */
-    let maxFogHeight = height*0.5;
+    let maxFogHeight = height*0.6;
     let fogHeight = lerp((maxFogHeight/historySize)*(i-1), (maxFogHeight/historySize)*(i), animationPlayhead);
 
     let mountainBaseY = height - mountainGap*(i+1) - mountainGap*animationPlayhead;
@@ -582,6 +592,16 @@ function updateConstants(e) {
         resetButton.disabled = false;
       }
       break;
+    case 'pixeldensity':
+        var val = parseFloat(elmnt.value);
+        //validate
+        if( !isNaN(val) && val >= 0.1 && val <= 1){
+          pixelDense = val;
+          pixelDensity(pixelDense);
+          saveButton.disabled = false;
+          resetButton.disabled = false;
+        }
+        break;
   }
 }
 
@@ -591,6 +611,7 @@ function saveConstants() {
   localStorage.setItem("gapSize", mountainGap);
   localStorage.setItem("peakSize", peakHeightPercent); 
   localStorage.setItem("mountWidth", baseWidthRatio); 
+  localStorage.setItem("pixelDensity", pixelDense); 
 
   saveButton.disabled = true;
   resetButton.disabled = true;
@@ -602,6 +623,7 @@ function defaultConstants() {
   localStorage.removeItem('gapSize');
   localStorage.removeItem('peakSize');
   localStorage.removeItem("mountWidth"); 
+  localStorage.removeItem("pixelDensity"); 
 
   window.location.reload();
 }
