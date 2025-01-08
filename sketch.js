@@ -284,7 +284,9 @@ function draw() {
   * History
   * -------------------------------------------------------------*/
   
-  for (let i = mountains.length - 1; i >= 0; i--) {
+  //mountains.length - 2 because the last one is usually fully covered by fog
+  //so we don't render it.
+  for (let i = mountains.length - 2; i >= 0; i--) {
     //In this cycle of animation, what color does this mountain start with
     let colorStart = lerpColor(historyColorStart, historyColorEnd, i/(historySize - 1));
     //In this cycle of animation, what color does this mountain end with
