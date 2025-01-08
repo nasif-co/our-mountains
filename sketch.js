@@ -78,6 +78,8 @@ let historyColorEnd;
 let currentColor;
 let snapshotColor;
 let activeColor;
+let fogColor;
+let fogColorTransparent;
 
 //Camera input
 let video;
@@ -136,12 +138,13 @@ function preload() {
 
 function setup() {
   //Set colors
-  historyColorStart = color("rgb(82, 93, 247)");
-  historyColorEnd = color("white");
+  historyColorStart = color("rgb(0, 12, 177)");
+  historyColorEnd = color("rgb(255, 248, 242)");
   snapshotColor = color('white');
-  currentColor = color("rgb(82, 93, 247)");
-  activeColor = color("blue");
-
+  currentColor = color("rgb(0, 12, 177)");
+  activeColor = color("rgb(0, 9, 129)");
+  fogColor = color(255,248,242);
+  fogColorTransparent = color(255,248,242, 0);
 
   //Get saved constants from localStorage
   if(localStorage.getItem("historySize") !== null) {
@@ -314,6 +317,27 @@ function draw() {
     vertex(window.innerWidth * 2, window.innerHeight*2);
     vertex(0, window.innerHeight*2);
     endShape(CLOSE);
+
+    /* Fog between mountains */
+    let maxFogHeight = height*0.5;
+    let fogHeight = lerp((maxFogHeight/historySize)*(i-1), (maxFogHeight/historySize)*(i), animationPlayhead);
+
+    let mountainBaseY = height - mountainGap*(i+1) - mountainGap*animationPlayhead;
+
+    if (frameCount % framesToRecord == 0) {
+      mountainBaseY = height - mountainGap*(i+2);
+      fogHeight = (maxFogHeight/historySize)*(i);
+    }
+
+    linearGradient(
+      0, mountainBaseY + height*0.1, 0, mountainBaseY - fogHeight,
+      fogColor,
+      fogColorTransparent,
+    );
+    
+    noStroke();
+    rect(0, mountainBaseY - fogHeight, width, height*2);
+    fill(0);
   }
 
   /* --------------------------------------------------------------
@@ -574,3 +598,14 @@ document.addEventListener('keydown', (event) => {
       window.close(); // Close the window (triggers app quit)
   }
 });
+
+
+function linearGradient(sX, sY, eX, eY, colorS, colorE){
+  let gradient = drawingContext.createLinearGradient(
+    sX, sY, eX, eY
+  );
+  gradient.addColorStop(0, colorS);
+  gradient.addColorStop(1, colorE);
+  drawingContext.fillStyle = gradient;
+  // drawingContext.strokeStyle = gradient;
+}
