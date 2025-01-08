@@ -32,11 +32,13 @@ let historySize = 35;
 //Whether the last mountain added to the history came from a user or from idle movement
 let lastMountainWasIdle = true;
 
-//How wide is the peak of each mountain
-let mountainPeakWidth = Math.round(0.025*window.innerWidth); //20
-
 //How wide is the base of each mountain
-let mountainBaseWidth =  Math.round(0.20*window.innerWidth); //200
+let baseWidthRatio = 0.20;
+let mountainBaseWidth =  Math.round(baseWidthRatio*window.innerWidth); //200
+
+//How wide is the peak of each mountain
+let peakWidthRatio = baseWidthRatio*0.125; //0.025
+let mountainPeakWidth = Math.round(peakWidthRatio*window.innerWidth); //20
 
 //Define the maximum height of the mountain
 let peakHeightPercent = 0.6
@@ -115,6 +117,8 @@ const gapsize = window.gap;
 gapsize.addEventListener('change', updateConstants);
 const peaksize = window.peaks;
 peaksize.addEventListener('change', updateConstants);
+const mountWidth = window.mountwidth;
+mountWidth.addEventListener('change', updateConstants);
 
 const closeButton = window.debugclose;
 closeButton.addEventListener('click', function() {
@@ -167,6 +171,14 @@ function setup() {
     maxMountainHeight = window.innerHeight*peakHeightPercent;
   }
   peaksize.value = peakHeightPercent;
+
+  if(localStorage.getItem("mountWidth") !== null) {
+    baseWidthRatio = parseFloat(localStorage.getItem("mountWidth"));
+    peakWidthRatio = baseWidthRatio*0.125;
+    mountainBaseWidth =  Math.round(baseWidthRatio*window.innerWidth);
+    mountainPeakWidth = Math.round(peakWidthRatio*window.innerWidth);
+  }
+  mountWidth.value = baseWidthRatio;
 
 
   const p5canvas = createCanvas(windowWidth, windowHeight);
@@ -556,6 +568,18 @@ function updateConstants(e) {
         resetButton.disabled = false;
       }
       break;
+    case 'mountwidth':
+      var val = parseFloat(elmnt.value);
+      //validate
+      if( !isNaN(val) && val >= 0.01 && val <= 0.95){
+        baseWidthRatio = val;
+        peakWidthRatio = baseWidthRatio*0.125;
+        mountainBaseWidth =  Math.round(baseWidthRatio*window.innerWidth);
+        mountainPeakWidth = Math.round(peakWidthRatio*window.innerWidth);
+        saveButton.disabled = false;
+        resetButton.disabled = false;
+      }
+      break;
   }
 }
 
@@ -564,6 +588,7 @@ function saveConstants() {
   localStorage.setItem("cycleLength", framesToRecord);
   localStorage.setItem("gapSize", mountainGap);
   localStorage.setItem("peakSize", peakHeightPercent); 
+  localStorage.setItem("mountWidth", baseWidthRatio); 
 
   saveButton.disabled = true;
   resetButton.disabled = true;
@@ -574,6 +599,7 @@ function defaultConstants() {
   localStorage.removeItem('cycleLength');
   localStorage.removeItem('gapSize');
   localStorage.removeItem('peakSize');
+  localStorage.removeItem("mountWidth"); 
 
   window.location.reload();
 }
@@ -586,10 +612,10 @@ function windowResized() {
   video.size(width, height);
   maxMountainHeight = window.innerHeight*peakHeightPercent;
   //How wide is the peak of each mountain
-  mountainPeakWidth = Math.round(0.025*window.innerWidth); //20
+  mountainPeakWidth = Math.round(peakWidthRatio*window.innerWidth); //20
   
   //How wide is the base of each mountain
-  mountainBaseWidth =  Math.round(0.20*window.innerWidth); //200
+  mountainBaseWidth =  Math.round(baseWidthRatio*window.innerWidth); //200
 }
 
 //Close app on hitting the esc key
